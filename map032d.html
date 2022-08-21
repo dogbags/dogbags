@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html>
+<!--
+2022-02-15
+descende de leaflet_carc018, map020, map021, lc05, map023, map025, map026
+Resolvida a questão dos "buttons", agora fazer um "toggle", map027, map029
+removi layerControl, reduzi buttons a um com 3 funções
+map031 == mix de map028 com map030 (que tem um problema de zoom)
+map032 == mix de map029 e o que aprendi em map031
+-->
+
+<head>
+    <title>(map032) Dog bags, Carcavelos</title>
+    <meta charset="utf-8" />
+    <!-- <link rel="stylesheet" href="leaflet.css" /> -->
+    <!-- links a seguir actualizados cf https://leafletjs.com/download.html -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+        integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
+        crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
+        integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA=="
+        crossorigin="">
+        </script>
+        <script src="https://kit.fontawesome.com/abc123.js" crossorigin="anonymous"></script>
+        <script src="https://unpkg.com/leaflet-simple-map-screenshoter"></script>
+    <style>
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+    <style>
+        div.leaflet-popup-content {
+            margin: 2px 2px;
+        }
+    </style>
+    <style>
+        /* Styling for id=locate */
+        #locate,
+        #btn_dbg,
+        #help {
+            font-weight: bold;
+        }
+
+        #mapX {
+            position: relative;
+        }
+
+
+        #buttonsDiv {
+            position: absolute;
+            bottom: 0;
+        }
+    </style>
+    <script>console.log(screen.availWidth);</script>
+    <!-- <meta name="viewport" content="width=360 height=device-height, initial-scale=1.0"> -->
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0">
+    <!--  <meta name="viewport" content="width=screen.availWidth, height=screen.availHeight, initial-scale=1.0"> -->
+
+
+</head>
+
+<body>
+    <div id="main">
+        <div id=buttonsDivX class="topnav">
+            <button id="locate" type="button" name="Locate Me" onclick="locateMe()">You are here <img
+                    src="icons/marker-icon-red-mini.png"></button>
+            <!--
+            <button id="btn1" type="button" name="Locate Me" onclick="locateMeOld()"><b>You are here</b></button>
+                <button id="btn2" type="button" name="Remove me" onclick="removeMe()"><b>Remove</b></button>
+                    -->
+            <button id="help" type="button" name="Help me" onclick="helpMe()">Help</button>
+            <!--
+            <button id="btn4" type="button" name="Contains me" onclick="containsMe()"><b>Contains?</b></button>
+            <button id="btn5" type="button" name="Adjust me" onclick="adjustMe()"><b>Adjust</b></button>
+            <button id="btn6" type="button" name="Fake me" onclick="fakeMe()"><b>Fake</b></button>
+            <button id="btn_dbg">print zoom here</button>
+        -->
+
+            <button id="btn_dbg">v: map032</button>
+
+        </div>
+
+</div>
+<div id="map"></div>
+<script>
+L.Control.Attri = L.Control.extend({
+          onAdd: function(map) {
+            var wrapper = L.DomUtil.create('div', 'leaflet-control-wrapper'),
+                attribution = L.DomUtil.create('div', 'leaflet-control-attribution', wrapper),
+                //button = L.DomUtil.create('input', 'button', wrapper);
+                button = L.DomUtil.create('button', 'leaflet-button', wrapper);
+            button.type = "button";
+            button.style.width = '30px';
+            button.style.height = '30px';
+            button.style.opacity = '0.5';
+            button.style.borderColor = 'grey';
+            button.style.borderRadius = '4px';
+            button.style.backgroundColor = "#fff"
+            button.innerHTML = '<i class="fas fa-info"></i>';
+
+            wrapper.style.display = "flex";
+            wrapper.style.alignItems = "center";   
+
+            attribution.style.visibility = 'hidden';
+            attribution.innerHTML = "Attri";
+        
+            button.onclick = function(){
+              if(attribution.style.visibility == "visible")
+                attribution.style.visibility = 'hidden';
+              else
+                attribution.style.visibility = 'visible';
+            }
+            return wrapper;            
+          },
+      
+          onRemove: function(map) {
+            // Nothing to do here
+          }
+        });
+        // map.addControl(new L.Control.Attri({position:'bottomright', metric: false})) vai para baixo
+
+</script>
+
+    <!-- script src="leaflet.js"></script> -->
+    <!-- contains markers -->
+    <script src="dog_bags.js"></script>
+    <script>
+        // testes:
+        var showDbg = function (origin = 'any', msg = "?") {
+            return; // REMOVER PARA DEBUG
+            try {
+                const btn_dbg = document.getElementById("btn_dbg");
+                btn_dbg.innerHTML = (origin + " " + msg);
+                console.info(origin + " " + msg);
+            } catch (error) {
+                console.log("error: " + error);
+            }
+        }
+
+    </script>
+    //<script src="https://daniellsu.github.io/leaflet-betterscale/L.Control.BetterScale.js"></script>
+    <script>
+        var locationCircle;
+        var locationMarker;
+        var red_rectangle;
+        var blue_rectangle;
+        //var you_are_here = L.layerGroup();
+        var dogbags = L.layerGroup();
+        var streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://osm.org/copyright">OpenStreetMap</a> contributors'
+        })
+        /*
+        aqui vai-se passar tudo!
+        */
+        // icons
+        var dogIcon = L.icon({
+            iconUrl: 'icons/2022-02-04-dog33x51WonBl.png',
+            shadowUrl: 'icons/marker-shadow.png',
+
+            iconSize: [32, 51], // size of the icon [38, 95]
+            shadowSize: [50, 64], // size of the shadow
+            iconAnchor: [16, 51], // center of the icon which will correspond to marker's location
+            shadowAnchor: [16, 51],  // the same for the shadow
+            popupAnchor: [-3, -51] // point from which the popup should open relative to the iconAnchor
+        });
+
+        L.Marker.prototype.options.icon = L.icon({
+            iconUrl: "icons/marker-icon-red.png",
+            shadowUrl: "icons/marker-shadow.png",
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -41],
+            shadowSize: [41, 41]
+        });
+
+        //var mDogBagsGroup = L.layerGroup().addTo(dogbags);
+
+        for (var i = 0; i < dog_bags.length; i++) {
+            marker = new L.marker([dog_bags[i][0], dog_bags[i][1]], {
+                icon: dogIcon
+            })
+                .bindPopup("<h3>" + dog_bags[i][3] + "</h3>" +
+                    "<img src=" + dog_bags[i][2] + ">", {
+                    maxWidth: "auto"
+                }).addTo(dogbags);
+
+            // console.log("<img src=" + dog_bags[i][2]);
+        }
+        /* */
+        /*
+        até aqui
+        */
+
+        // Modify the cache busting value to force browser fetching from network.
+        //var imgSrc = 'https://a.tile.openstreetmap.org/0/0/0.png?bust=2';
+        // var imgSrc = 'images/20211103_r-joao-da-silva-302_359x249.png';
+        // var popupContent = '<img src="' + imgSrc + '"/></a>';
+        var map = L.map('map', {
+            // center: [38.6889, -9.3380],
+            // zoom: 18,
+            zoomSnap: 0.25, // usar 20 ou 25 para o PIN não ficar escondido?
+            layers: [streets, dogbags]  //, you_are_here
+        });
+
+        map.addControl(new L.Control.Attri({position:'topright', metric: true}))
+        L.simpleMapScreenshoter().addTo(map);
+        // L.control.betterscale().addTo(map);
+
+        /* https://stackoverflow.com/questions/38170366/leaflet-adjust-popup-to-picture-size  */
+        document.querySelector(".leaflet-popup-pane").addEventListener("load", function (event) {
+            var tagName = event.target.tagName,
+                popup = map._popup;
+            console.log("got load event from " + tagName);
+            // Also check if flag is already set.
+            if (tagName === "IMG" && popup && !popup._updated) {
+                popup._updated = true; // Set flag to prevent looping.
+                popup.update();
+            }
+        }, true);
+
+        var coords = [];
+        for (var i = 0; i < dog_bags.length; i++) {
+            coords[i] = [];
+            coords[i][0] = dog_bags[i][0];
+            coords[i][1] = dog_bags[i][1];
+
+        }
+        // de onde faço:
+        var bounds = new L.LatLngBounds(coords);
+        console.log(bounds);
+        red_rectangle = L.rectangle(bounds, { color: "#FF0000", weight: 2, fill: 0 }).addTo(map);
+        map.fitBounds(bounds);
+    </script>
+
+    <script>
+        // mostrar latLong onde se clicou
+        // map.locate({ setView: true, maxZoom: 16 });
+        var popup = L.popup();
+
+        function onMapClick(e) {
+            popup
+                .setLatLng(e.latlng)
+                .setContent("<B>" + e.latlng.lat.toFixed(4) + ", " + e.latlng.lng.toFixed(4) + "</B>")
+                .openOn(map);
+        }
+        map.on('click', onMapClick);
+    </script>
+
+    <script>
+        // calcular o novo bounds e centrar o mapa
+        function adjustMe() {
+            if (locationMarker === null || locationMarker === undefined) return;
+            if (bounds.contains(locationMarker._latlng)) return;
+            console.log("do it");
+            coords.push(locationMarker._latlng);
+            var newBounds = new L.LatLngBounds(coords);
+            console.table("onAdjustMe: " + JSON.stringify(newBounds));
+            dogbags.removeLayer(red_rectangle);
+            blue_rectangle = L.rectangle(newBounds, { color: "#00FF00", weight: 2, fill: 0 }).addTo(dogbags);
+            map.fitBounds(newBounds);
+            console.info("fitBounds(newBounds)");
+            coords.pop(locationMarker._latlng); // não vamos deixar array esquecido
+
+            //alert("bounds\n" + JSON.stringify(bounds) + '\n' + "newBounds\n" + JSON.stringify(newBounds));
+        }
+
+
+
+        function onLocationFound(e) {
+            var radius = e.accuracy;
+            //removeMe(); // primeira vez remove o Circle
+            //removeMe(); // segunda vez remove o marker!
+            //map.removeLayer(you_are_here);
+            // Usar estes 2 em produção final
+            // locationCircle = L.circle(e.latlng, radius).addTo(dogbags);
+            // locationMarker = L.marker(e.latlng, { title: "You are here!" });
+            locationMarker = L.marker([38.7066, -9.3279], { title: "You are here!" }); // Rua do Rio Ave
+            locationCircle = L.circle([38.7066, -9.3279], 500).addTo(dogbags); // Rua do Rio Ave
+            locationMarker.addTo(dogbags);
+            // tem de ser aqui, quando executa o evento
+            adjustMe();
+        }
+
+        //map.on('locationfound', onLocationFound);
+        // Excellent! But it would also be nice to show an error message if the geolocation failed:
+
+        function onLocationError(e) {
+            alert(e.message);
+        }
+        map.on('locationfound', onLocationFound);
+        map.on('locationerror', onLocationError);
+
+        // map.locate({ setView: true, maxZoom: 18 }); // assim centra o mapa na location
+        //map.locate({ setView: false, maxZoom: 18 }); // se deixar ficar esta linha, "locate" ao brir
+        /*
+                var overlays = {
+                    'I am here': you_are_here
+                    //''DogBags': dogbags
+                };
+        */
+        /*
+         // 		var layerControl = L.control.layers(baseLayers, overlays).addTo(map);
+         // agora um teste na rotunda da Via Rápida:     38.6913, -9.332 
+         // var testMarker = L.marker([38.6913, -9.332]).addTo(map);
+         function removeMe() {
+             if (dogbags.hasLayer(locationCircle)) {
+                 dogbags.removeLayer(locationCircle);   // para não sobrepor muitos círculos!
+                 console.log("apaguei Circle");
+                 return;
+             };
+             if (dogbags.hasLayer(locationMarker)) {
+                 dogbags.removeLayer(locationMarker);   // para não sobrepor muitos Marker!
+                 locationMarker = null;    // se não, continua definido!
+                 console.log("apaguei Marker");
+             };
+ 
+         }
+         */
+        // em debug, usar isto para mover o locationMarker fora do "bounds":
+        // locationMarker.setLatLng([38.68,-9.34])
+        function fakeMe() {
+            locationMarker.setLatLng([38.7066, -9.3279]); // Rua do Rio Ave
+        }
+        function containsMe() {
+            if (locationMarker != null) {
+                console.log(bounds.contains(locationMarker._latlng));
+                bounds.contains(locationMarker._latlng) ? console.log("inside") : console.log("outside");
+            } else {
+                console.log("not exists!");
+            }
+        }
+        /*
+        // calcular o novo bounds e centrar o mapa
+        function adjustMe() {
+            if (locationMarker === null || locationMarker === undefined) return;
+            if (bounds.contains(locationMarker._latlng)) return;
+            console.log("do it");
+            coords.push(locationMarker._latlng);
+            var newBounds = new L.LatLngBounds(coords);
+            console.table(newBounds);
+            map.fitBounds(newBounds);
+            coords.pop(locationMarker._latlng); // não vamos deixar array esquecido
+        }
+*/
+        function helpMe() {
+            window.open("help/dogs_help.html");
+        }
+        /*
+                    var layerControl = L.control.layers(null, overlays).addTo(map);
+            */
+        /*
+         function locateMe() {
+             const btn = document.getElementById("locate");
+             takeSwitch();
+ 
+             console.log("1: " + btn.innerText)
+             if (btn.innerHTML === "You are here ") {
+                 btn.innerHTML = "Remove ";
+                 console.log("2: " + btn.innerHTML)
+             } else {
+                 btn.innerHTML = "You are here ";
+                 console.log("3: " + btn.innerHTML)
+             }
+ 
+             map.locate({ setView: true, maxZoom: 18 }); // assim centra o mapa na location
+         }
+ */
+    </script>
+    <script>
+        // states machine for "You are here" \ "Remove O" \ "Remove PIN" button
+        var state = "YAH";
+
+        function locateMe() {
+            const btn = document.getElementById("locate");
+            switch (state) {
+                case "YAH":
+                    map.locate({ setView: false });//, maxZoom: 18 }); // assim centra o mapa na location
+                    // tem de ser quando executa o evento
+                    // adjustMe();
+                    state = "RC";
+                    showDbg("YAH => RC");
+                    // conversa do button seguinte
+                    btn.innerHTML = "Remove Circle " +
+                        '<img src="icons/circle-blue-mini.png">';
+                    break;
+                case "RC":
+                    btn.innerHTML = "Remove Pin " +
+                        '<img src="icons/marker-icon-red-mini.png">';
+                    dogbags.removeLayer(locationCircle);   // para não sobrepor muitos círculos!
+                    console.log("apaguei Circle");
+                    console.table(bounds);
+                    showDbg("RC => RP");
+                    state = "RP";
+                    break;
+                case "RP":
+                    dogbags.removeLayer(locationMarker);   // para não sobrepor muitos Marker!
+                    showDbg("removi locationMarker");
+                    locationMarker = null;    // se não, continua definido!
+                    console.log("apaguei Marker");
+                    try {
+                        dogbags.removeLayer(blue_rectangle);
+                        showDbg("removi blue_rectangle");
+                    } catch {
+                        showDbg("não há blue_rectangle!!!");
+                    }
+
+                    map.fitBounds(bounds);
+                    showDbg("fiz map.fitBounds(bounds)");
+                    console.table(bounds);
+                    // conversa do button seguinte
+                    btn.innerHTML = "You are here " +
+                        '<img src="icons/marker-icon-red-mini.png">';
+                    showDbg("RP => YAH)");
+                    state = "YAH";
+                    break;
+                default:
+                    state = "YAH";
+                    console.log("something wrong!");
+                    break;
+            }
+            console.log(btn.innerHTML)
+            console.log("state: " + state);
+        }
+    </script>
+    <!--
+     Usar estas funções para verificar se estou sempre a adicionar fetaures aos layers
+ <script>
+        var a = getAllMarkers();
+        // getting all the markers at once
+        function getAllMarkers() {
+
+            var allMarkersObjArray = []; // for marker objects
+            var allMarkersGeoJsonArray = []; // for readable geoJson markers
+
+            map.eachLayer(function (ml) {
+                console.log("ml: " + ml);
+                if (map._layers[ml].feature) {
+
+                    allMarkersObjArray.push(this)
+                    allMarkersGeoJsonArray.push(JSON.stringify(this.toGeoJSON()))
+                }
+            })
+
+            console.table(allMarkersObjArray);
+        }
+
+        let k = 0;
+        map.eachLayer(function () { k += 1; });
+        console.log('Map has', h, 'layers.');   // Map has 18 layers etc.
+
+    </script>
+-->
+</body>
+
+</html>
